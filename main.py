@@ -1,81 +1,69 @@
-from generate import generate_params
-from params import generate_group
+from params import load_or_generate_group
 from ring import sign, verify
 
 
-MEMBERS = ["Alice", "Bob", "Carol", "You"]
+MEMBERS = ["Almothana", "Abdullah", "Esam", "You"]
+
+
+def short(n):
+    s = str(n)
+    return s[:10] + "..." + s[-6:]
 
 
 def print_signature(signature, members):
-    print("  Signature (c_i, r_i) per member:")
     for i, (c_i, r_i) in enumerate(signature):
-        print(f"    [{members[i]}]  c={c_i}  r={r_i}")
+        print(f"  {members[i]:12}  c={short(c_i)}  r={short(r_i)}")
 
 
 def main():
-    print("=" * 60)
-    print("       Ring Signature Demo — Non-Cyclic Version")
-    print("=" * 60)
-
-    # --- Setup ---
-    params = generate_params(bits=512)
-    p, q, g = params
 
     n = len(MEMBERS)
-    private_keys, public_keys = generate_group(n, p, q, g)
+    params, private_keys, public_keys = load_or_generate_group(n, bits=512)
+    p, q, g = params
 
-    print("Group members:", ", ".join(MEMBERS))
-    print("Public keys:")
-    for i, name in enumerate(MEMBERS):
-        print(f"  {name}: y = {str(public_keys[i])[:40]}...")
+    print("Group:", ", ".join(MEMBERS))
     print()
 
     # --- Demo 1: You sign a message ---
-    message = "I vote YES"
+    message = "I like anonimity"
     signer_index = 3  # "You"
 
-    print(f"Message: '{message}'")
-    print(f"Signer:  {MEMBERS[signer_index]} (index {signer_index})\n")
+    print(f"Message : '{message}'")
+    print(f"Signer  : {MEMBERS[signer_index]}\n")
 
     signature = sign(message, signer_index, private_keys[signer_index], public_keys, params)
+    print("Signature:")
     print_signature(signature, MEMBERS)
-    print()
 
     result = verify(message, signature, public_keys, params)
-    print(f"Verification result: {'VALID' if result else 'INVALID'}")
-    print()
+    print(f"\nVerification : {'VALID' if result else 'INVALID'}")
 
-    # --- Demo 2: Tamper with the signature ---
-    print("-" * 60)
-    print("Tamper test: flip c_0 by 1")
+    # --- Tamper test ---
     c0, r0 = signature[0]
     tampered = [(c0 + 1, r0)] + list(signature[1:])
     tampered_result = verify(message, tampered, public_keys, params)
-    print(f"Tampered verification: {'VALID' if tampered_result else 'INVALID'}")
-    print()
+    print(f"Tamper test  : {'VALID' if tampered_result else 'INVALID'}  (flipped c_0 by 1)")
 
-    # --- Demo 3: Anonymity — Alice also signs the same message ---
-    print("-" * 60)
-    print("Anonymity demo: Alice signs the same message\n")
+    # --- Anonymity demo ---
+    sig_a1 = sign(message, 0, private_keys[0], public_keys, params)
+    sig_a2 = sign(message, 0, private_keys[0], public_keys, params)
+    sig_y1 = sign(message, signer_index, private_keys[signer_index], public_keys, params)
+    sig_y2 = sign(message, signer_index, private_keys[signer_index], public_keys, params)
 
-    alice_index = 0
-    sig_alice = sign(message, alice_index, private_keys[alice_index], public_keys, params)
-    sig_you   = sign(message, signer_index, private_keys[signer_index], public_keys, params)
+    cases = [
+        (f"{MEMBERS[0]} (1st)", sig_a1),
+        (f"{MEMBERS[0]} (2nd)", sig_a2),
+        (f"You (1st)",          sig_y1),
+        (f"You (2nd)",          sig_y2),
+    ]
 
-    print("Alice's signature:")
-    print_signature(sig_alice, MEMBERS)
-    print()
-    print("Your signature:")
-    print_signature(sig_you, MEMBERS)
-    print()
+    print(f"\nAnonymity demo — same message, 4 signatures:")
+    for label, sig in cases:
+        v = verify(message, sig, public_keys, params)
+        print(f"\n  [{label}] → {'VALID' if v else 'INVALID'}")
+        print_signature(sig, MEMBERS)
 
-    print("Both valid?")
-    print(f"  Alice's sig: {'VALID' if verify(message, sig_alice, public_keys, params) else 'INVALID'}")
-    print(f"  Your sig:    {'VALID' if verify(message, sig_you,  public_keys, params) else 'INVALID'}")
-    print()
-    print("The verifier cannot tell which member signed — both signatures")
-    print("are structurally identical. This is anonymity.")
-    print("=" * 60)
+    print("\n  Verifier cannot distinguish who signed.")
 
 
 if __name__ == "__main__":
